@@ -1,7 +1,42 @@
 ﻿@page "/"
+@using CryptoApp.Models
+@using CryptoApp.Services
+@inject CryptoService CryptoService
 
-<PageTitle>Home</PageTitle>
+<h1>Top 10 Cryptomonnaies</h1>
 
-<h1>Hello, world!</h1>
+@if (cryptos == null)
+{
+    <p><em>Chargement...</em></p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Rang</th>
+                <th>Nom</th>
+                <th>Prix (USD)</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var coin in cryptos)
+            {
+                <tr>
+                    <td>@coin.MarketCapRank</td>
+                    <td><img src="@coin.Image" width="25" /> @coin.Name</td>
+                    <td>@coin.CurrentPrice.ToString("C2")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
 
-Welcome to your new app.
+@code {
+    private List<Crypto>? cryptos;
+
+    protected override async Task OnInitializedAsync()
+    {
+        cryptos = await CryptoService.GetTop10Cryptos();
+    }
+}
