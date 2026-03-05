@@ -1,0 +1,99 @@
+@page "/favorites"
+@using CryptoApp.Models
+@using CryptoApp.Services
+@inject FavoriteService FavoriteService
+
+<PageTitle>Mes Favoris</PageTitle>
+
+<h1>Mes Cryptos Favorites</h1>
+
+@* On protège la page : seul un utilisateur connecté voit le contenu *@
+<AuthorizeView>
+    <Authorized>
+        @if (favorites == null)
+        {
+            <p><em>Chargement de vos favoris...</em></p>
+        }
+        else if (favorites.Count == 0)
+        {
+            <p>Vous n'avez pas encore de favoris. Allez sur l'accueil pour en ajouter !</p>
+        }
+        else
+        {
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Logo</th>
+                        <th>Nom</th>
+                        <th>Nouveau Prix (Modification)</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var coin in favorites)
+                    {
+                        <tr>
+                            <td><img src="@coin.ImageUrl" alt="@coin.Name" width="30" height="30" /></td>
+                            <td>@coin.Name</td>
+                            <td>
+                                @* Champ pour modifier le prix localement *@
+                                <input type="number" step="0.01" class="form-control" @bind="coin.CurrentPrice" />
+                            </td>
+                            <td>
+                                <button class="btn btn-primary btn-sm me-2" @onclick="() => UpdateFavorite(coin)">Sauvegarder</button>
+                                <button class="btn btn-danger btn-sm" @onclick="() => RemoveFavorite(coin.Id)">Supprimer</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            @if (showMessage)
+            {
+                <div class="alert alert-success mt-3" role="alert">
+                    Favori mis à jour avec succès !
+                </div>
+            }
+        }
+    </Authorized>
+    <NotAuthorized>
+        <p class="text-danger">Vous devez être connecté pour voir cette page.</p>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private List<CryptoCoin>? favorites;
+    private bool showMessage = false;
+
+    // S'exécute à l'ouverture de la page
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadFavorites();
+    }
+
+    // Récupère les données du LocalStorage
+    private async Task LoadFavorites()
+    {
+        favorites = await FavoriteService.GetFavoritesAsync();
+    }
+
+    // Supprime un favori et recharge la liste
+    private async Task RemoveFavorite(string id)
+    {
+        await FavoriteService.RemoveFavoriteAsync(id);
+        await LoadFavorites(); 
+    }
+
+    // Enregistre la modification (le nouveau prix)
+    private async Task UpdateFavorite(CryptoCoin coin)
+    {
+        await FavoriteService.UpdateFavoriteAsync(coin);
+        
+        // Petit message visuel
+        showMessage = true;
+        StateHasChanged(); 
+        await Task.Delay(2000); 
+        showMessage = false;
+        StateHasChanged();
+    }
+}

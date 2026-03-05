@@ -1,0 +1,122 @@
+﻿@page "/"
+@using CryptoApp.Models
+@using CryptoApp.Services
+@inject CryptoService CryptoService
+@inject FavoriteService FavoriteService
+@inject AuthenticationStateProvider AuthStateProvider
+
+<PageTitle>Top 10 Cryptos</PageTitle>
+
+<h1>Top 10 des Cryptomonnaies</h1>
+
+@if (errorMessage != null)
+{
+    <div class="alert alert-danger" role="alert">
+        @errorMessage
+    </div>
+}
+else if (cryptos == null)
+{
+    <p><em>Chargement des données depuis l'API CoinGecko...</em></p>
+}
+else
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Logo</th>
+                <th>Nom</th>
+                <th>Symbole</th>
+                <th>Prix (USD)</th>
+                @* Cette colonne n'apparait que si on est connecté *@
+                <AuthorizeView>
+                    <Authorized>
+                        <th>Action</th>
+                    </Authorized>
+                </AuthorizeView>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var coin in cryptos)
+            {
+                <tr>
+                    <td><img src="@coin.ImageUrl" alt="@coin.Name" width="30" height="30" /></td>
+                    <td>@coin.Name</td>
+                    <td>@coin.Symbol.ToUpper()</td>
+                    <td>$@coin.CurrentPrice</td>
+                    @* Le bouton n'apparait que si on est connecté *@
+                    <AuthorizeView Context="authContext">
+                        <Authorized>
+                            <td>
+                                <button class="btn btn-success btn-sm" @onclick="() => AddToFavorites(coin)">
+                                    ⭐ Ajouter
+                                </button>
+                            </td>
+                        </Authorized>
+                    </AuthorizeView>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @* Un petit message de confirmation temporaire *@
+    @if (showMessage)
+    {
+        <div class="alert alert-success mt-3" role="alert">
+            Ajouté aux favoris avec succès !
+        </div>
+    }
+}
+
+@code {
+    private List<CryptoCoin>? cryptos;
+    private bool showMessage = false;
+    private string? errorMessage; // Nouvelle variable pour stocker l'erreur
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // 1. On essaie d'aller chercher les vraies données de l'API
+            cryptos = await CryptoService.GetTop10CryptosAsync();
+
+            // 2. On gère l'authentification et les favoris (ton code précédent)
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity is not null && user.Identity.IsAuthenticated)
+            {
+                var favorites = await FavoriteService.GetFavoritesAsync();
+
+                if (cryptos != null && favorites.Count > 0)
+                {
+                    foreach (var coin in cryptos)
+                    {
+                        var fav = favorites.FirstOrDefault(f => f.Id == coin.Id);
+                        if (fav != null)
+                        {
+                            coin.CurrentPrice = fav.CurrentPrice;
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // Si l'API nous bloque (Erreur 429), on l'attrape ici !
+            errorMessage = "Impossible de récupérer les données (trop de requêtes vers l'API CoinGecko). Veuillez patienter une minute et rafraîchir la page.";
+            Console.WriteLine($"Erreur API: {ex.Message}");
+        }
+    }
+
+    private async Task AddToFavorites(CryptoCoin coin)
+    {
+        await FavoriteService.AddFavoriteAsync(coin);
+        
+        showMessage = true;
+        StateHasChanged(); 
+        await Task.Delay(2000); 
+        showMessage = false;
+        StateHasChanged();
+    }
+}

@@ -1,0 +1,39 @@
+﻿@inherits LayoutComponentBase
+@using CryptoApp.Services
+@inject FakeAuthStateProvider AuthProvider
+
+<div class="page">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+
+    <main>
+        <div class="top-row px-4">
+            <AuthorizeView>
+                <Authorized>
+                    <span class="me-3">Bonjour, @context.User.Identity?.Name !</span>
+                    <button class="btn btn-outline-danger btn-sm" @onclick="Logout">Se déconnecter</button>
+                </Authorized>
+                <NotAuthorized>
+                    <button class="btn btn-primary btn-sm" @onclick="Login">Se connecter</button>
+                </NotAuthorized>
+            </AuthorizeView>
+        </div>
+
+        <article class="content px-4">
+            @Body
+        </article>
+    </main>
+</div>
+
+@code {
+    private void Login()
+    {
+        AuthProvider.Login();
+    }
+
+    private void Logout()
+    {
+        AuthProvider.Logout();
+    }
+}
