@@ -1,6 +1,7 @@
 ﻿@inherits LayoutComponentBase
 @using CryptoApp.Services
-@inject FakeAuthStateProvider AuthProvider
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager NavigationManager
 
 <div class="page">
     <div class="sidebar">
@@ -11,11 +12,11 @@
         <div class="top-row px-4">
             <AuthorizeView>
                 <Authorized>
-                    <span class="me-3">Bonjour, @context.User.Identity?.Name !</span>
+                    <span class="me-3">Bonjour, <strong>@context.User.Identity?.Name</strong> !</span>
                     <button class="btn btn-outline-danger btn-sm" @onclick="Logout">Se déconnecter</button>
                 </Authorized>
                 <NotAuthorized>
-                    <button class="btn btn-primary btn-sm" @onclick="Login">Se connecter</button>
+                    <a href="/login" class="btn btn-primary btn-sm">Se connecter</a>
                 </NotAuthorized>
             </AuthorizeView>
         </div>
@@ -27,13 +28,10 @@
 </div>
 
 @code {
-    private void Login()
+    private async Task Logout()
     {
-        AuthProvider.Login();
-    }
-
-    private void Logout()
-    {
-        AuthProvider.Logout();
+        var provider = (FakeAuthStateProvider)AuthStateProvider;
+        await provider.LogoutAsync();
+        NavigationManager.NavigateTo("/login");
     }
 }

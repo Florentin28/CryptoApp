@@ -1,40 +1,52 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.JSInterop;
 
 namespace CryptoApp.Services;
 
-// On hérite de la classe officielle de Blazor pour l'authentification
 public class FakeAuthStateProvider : AuthenticationStateProvider
 {
-    // Un utilisateur vide (non connecté)
-    private readonly ClaimsPrincipal _anonymous = new(new ClaimsIdentity());
-    
-    // Un utilisateur factice (connecté)
-    private readonly ClaimsPrincipal _user = new(new ClaimsIdentity(
-    [
-        new Claim(ClaimTypes.Name, "Étudiant")
-    ], "FakeAuth"));
+    private readonly IJSRuntime _jsRuntime;
 
-    private bool _isAuthenticated = false;
-
-    // Cette méthode est appelée par Blazor pour savoir si on est connecté
-    public override Task<AuthenticationState> GetAuthenticationStateAsync()
+    public FakeAuthStateProvider(IJSRuntime jsRuntime)
     {
-        var principal = _isAuthenticated ? _user : _anonymous;
-        return Task.FromResult(new AuthenticationState(principal));
+        _jsRuntime = jsRuntime;
     }
 
-    // Méthode pour se connecter
-    public void Login()
+    public override async Task<AuthenticationState> GetAuthenticationStateAsync()
     {
-        _isAuthenticated = true;
-        NotifyAuthenticationStateChanged(GetAuthenticationStateAsync());
+        try
+        {
+            // On vérifie si un nom est sauvegardé dans le navigateur
+            var username = await _jsRuntime.InvokeAsync<string>("localStorage.getItem", "currentUser");
+            
+            if (!string.IsNullOrEmpty(username))
+            {
+                var identity = new ClaimsIdentity(new[] { new Claim(ClaimTypes.Name, username) }, "apiauth");
+                var user = new ClaimsPrincipal(identity);
+                return new AuthenticationState(user);
+            }
+        }
+        catch { /* Ignore les erreurs au chargement initial */ }
+
+        // Si personne, on renvoie un visiteur anonyme
+        return new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()));
     }
 
-    // Méthode pour se déconnecter
-    public void Logout()
+    public async Task LoginAsync(string username)
     {
-        _isAuthenticated = false;
-        NotifyAuthenticationStateChanged(GetAuthenticationStateAsync());
+        // On sauvegarde le profil dans le navigateur
+        await _jsRuntime.InvokeVoidAsync("localStorage.setItem", "currentUser", username);
+        
+        var identity = new ClaimsIdentity(new[] { new Claim(ClaimTypes.Name, username) }, "apiauth");
+        var user = new ClaimsPrincipal(identity);
+        NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(user)));
+    }
+
+    public async Task LogoutAsync()
+    {
+        // On vide le navigateur à la déconnexion
+        await _jsRuntime.InvokeVoidAsync("localStorage.removeItem", "currentUser");
+        NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()))));
     }
 }

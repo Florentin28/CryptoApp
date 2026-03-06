@@ -1,64 +1,70 @@
 using System.Text.Json;
-using CryptoApp.Models;
 using Microsoft.JSInterop;
+using CryptoApp.Models;
+using Microsoft.AspNetCore.Components.Authorization;
 
 namespace CryptoApp.Services;
 
 public class FavoriteService
 {
     private readonly IJSRuntime _jsRuntime;
-    private const string Key = "mes_favoris"; // Le nom de notre "tiroir" dans le navigateur
+    private readonly AuthenticationStateProvider _authStateProvider;
 
-    public FavoriteService(IJSRuntime jsRuntime)
+    // On injecte l'état d'authentification ici !
+    public FavoriteService(IJSRuntime jsRuntime, AuthenticationStateProvider authStateProvider)
     {
         _jsRuntime = jsRuntime;
+        _authStateProvider = authStateProvider;
     }
 
-    // 1. Lire les favoris
+    // Cette méthode génère la clé unique (ex: "favorites_Daniel")
+    private async Task<string> GetUserKeyAsync()
+    {
+        var authState = await _authStateProvider.GetAuthenticationStateAsync();
+        var username = authState.User.Identity?.Name ?? "Anonyme";
+        return $"favorites_{username}";
+    }
+
     public async Task<List<CryptoCoin>> GetFavoritesAsync()
     {
-        var json = await _jsRuntime.InvokeAsync<string>("localStorage.getItem", Key);
+        var key = await GetUserKeyAsync();
+        var json = await _jsRuntime.InvokeAsync<string>("localStorage.getItem", key);
         if (string.IsNullOrEmpty(json)) return new List<CryptoCoin>();
-        
-        // On transforme le texte du LocalStorage en vraie liste d'objets C#
         return JsonSerializer.Deserialize<List<CryptoCoin>>(json) ?? new List<CryptoCoin>();
     }
 
-    // 2. Sauvegarder les favoris
-    public async Task SaveFavoritesAsync(List<CryptoCoin> favorites)
-    {
-        var json = JsonSerializer.Serialize(favorites);
-        await _jsRuntime.InvokeVoidAsync("localStorage.setItem", Key, json);
-    }
-
-    // 3. Ajouter un favori
     public async Task AddFavoriteAsync(CryptoCoin coin)
     {
         var favorites = await GetFavoritesAsync();
-        if (!favorites.Any(f => f.Id == coin.Id)) // On vérifie qu'il n'y est pas déjà
+        if (!favorites.Any(f => f.Id == coin.Id))
         {
             favorites.Add(coin);
-            await SaveFavoritesAsync(favorites);
+            var key = await GetUserKeyAsync();
+            await _jsRuntime.InvokeVoidAsync("localStorage.setItem", key, JsonSerializer.Serialize(favorites));
         }
     }
 
-    // 4. Supprimer un favori
     public async Task RemoveFavoriteAsync(string id)
     {
         var favorites = await GetFavoritesAsync();
-        favorites.RemoveAll(f => f.Id == id);
-        await SaveFavoritesAsync(favorites);
+        var coinToRemove = favorites.FirstOrDefault(f => f.Id == id);
+        if (coinToRemove != null)
+        {
+            favorites.Remove(coinToRemove);
+            var key = await GetUserKeyAsync();
+            await _jsRuntime.InvokeVoidAsync("localStorage.setItem", key, JsonSerializer.Serialize(favorites));
+        }
     }
 
-    // 5. Modifier un favori (pour respecter la consigne "modifier les données")
     public async Task UpdateFavoriteAsync(CryptoCoin coin)
     {
         var favorites = await GetFavoritesAsync();
-        var index = favorites.FindIndex(f => f.Id == coin.Id);
-        if (index != -1)
+        var existingCoin = favorites.FirstOrDefault(f => f.Id == coin.Id);
+        if (existingCoin != null)
         {
-            favorites[index] = coin; // On écrase l'ancien par le nouveau modifié
-            await SaveFavoritesAsync(favorites);
+            existingCoin.CurrentPrice = coin.CurrentPrice;
+            var key = await GetUserKeyAsync();
+            await _jsRuntime.InvokeVoidAsync("localStorage.setItem", key, JsonSerializer.Serialize(favorites));
         }
     }
 }
